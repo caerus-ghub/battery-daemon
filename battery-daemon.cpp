@@ -4,6 +4,26 @@
 #include <stdlib.h>
 #include <fcntl.h>
 
+char* logFilePath;
+
+int logToFile(const char* logFilePath, const char* text) {
+  if (!logFilePath) {
+    return -1;
+  }
+
+  FILE *file = fopen(logFilePath, "a");
+  if (file == NULL) {
+    return 1;
+  }
+
+  fprintf(file, text);
+  fprintf(file, "\n");
+
+  fclose(file);
+
+  return 0;
+}
+
 int getBatteryLevel() {
   FILE* file = fopen("/sys/class/power_supply/BAT0/capacity", "r");
   if (file == NULL) {
@@ -14,7 +34,7 @@ int getBatteryLevel() {
   int readStatus = fscanf(file, "%d", &batteryLavel);
 
   if (readStatus) {
-    // std::cout << " -| read battery level status:" << readStatus << "\n";
+    logToFile(logFilePath, "--| error: can't get battery level");
   }
 
   fclose(file);
@@ -33,21 +53,7 @@ int sendNotification() {
   return 0;
 }
 
-int logToFile(const char* logFile, const char* text) {
-  FILE *file = fopen(logFile, "a");
-  if (file == NULL) {
-    return 1;
-  }
-
-  fprintf(file, text);
-  fprintf(file, "\n");
-
-  fclose(file);
-
-  return 0;
-}
-
-void daemonStart(const char* logFile) {
+void daemonStart() {
   std::cout << "My daemon is running!\n";
 
   while (true) {
@@ -57,10 +63,7 @@ void daemonStart(const char* logFile) {
     char* logText;
 
     sprintf(logText, "%d", batteryLevel);
-
-    if (logFile) {
-      logToFile(logFile, logText);
-    }
+    logToFile(logFilePath, logText);
 
     if (batteryLevel < 20) {
       sendNotification();
@@ -69,6 +72,7 @@ void daemonStart(const char* logFile) {
 }
 
 int main(int argc, char** argv) {
+  logFilePath = argv[1];
   pid_t pid = fork();
 
   if (pid < 0) {
@@ -95,7 +99,7 @@ int main(int argc, char** argv) {
   open("/dev/null", O_RDWR);
   open("/dev/null", O_RDWR);
 
-  daemonStart(argv[1]);
+  daemonStart();
 
   return 0;
 }
