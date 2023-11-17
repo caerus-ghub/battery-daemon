@@ -1,12 +1,15 @@
+#include "fileUtils.h"
+#include <cstdlib>
+#include <cstring>
+#include <fcntl.h>
 #include <iostream>
-#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <fcntl.h>
+#include <unistd.h>
 
-char* logFilePath;
+char *logFilePath;
 
-int logToFile(const char* logFilePath, const char* text) {
+int logToFile(const char *logFilePath, const char *text) {
   if (!logFilePath) {
     return -1;
   }
@@ -25,27 +28,17 @@ int logToFile(const char* logFilePath, const char* text) {
 }
 
 int getBatteryLevel() {
-  FILE* file = fopen("/sys/class/power_supply/BAT0/capacity", "r");
-  if (file == NULL) {
-    return -1;
-  }
+  int batteryLevel =
+      std::atoi(readFile("/sys/class/power_supply/BAT0/capacity"));
 
-  int batteryLavel;
-  int readStatus = fscanf(file, "%d", &batteryLavel);
-
-  if (readStatus) {
-    logToFile(logFilePath, "--| error: can't get battery level");
-  }
-
-  fclose(file);
-
-  return batteryLavel;
+  return batteryLevel;
 }
 
-int sendNotification() {
-  const char* command = "notify-send 'Plug charger!'";
+int sendNotification(char *batteryLevel) {
+  char textStart[] = "notify-send 'battery level: ";
+  char *command = strcat(strcat(textStart, batteryLevel), "'");
 
-  FILE* pipe = popen(command, "r");
+  FILE *pipe = popen(command, "r");
   if (pipe == NULL) {
     return 1;
   }
@@ -54,30 +47,32 @@ int sendNotification() {
 }
 
 void daemonStart() {
-  std::cout << "My daemon is running!\n";
-
   while (true) {
-    sleep(15);
+    sleep(60);
 
     int batteryLevel = getBatteryLevel();
-    char* logText;
+    char sbatteryLevel[10];
 
-    sprintf(logText, "%d", batteryLevel);
-    logToFile(logFilePath, logText);
+    sprintf(sbatteryLevel, "%d", batteryLevel);
+    logToFile(logFilePath, sbatteryLevel);
 
     if (batteryLevel < 20) {
-      sendNotification();
+      sendNotification(sbatteryLevel);
     }
   }
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
   logFilePath = argv[1];
   pid_t pid = fork();
 
   if (pid < 0) {
     std::cerr << "Failed to fork the process.\n";
     return 1;
+  }
+
+  if (pid > 0) {
+    return 0;
   }
 
   pid_t sid = setsid();
